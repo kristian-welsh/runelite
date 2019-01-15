@@ -25,6 +25,9 @@
 package net.runelite.client.plugins.nightmarezone;
 
 import com.google.inject.Provides;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import javax.inject.Inject;
 import net.runelite.api.ChatMessageType;
@@ -71,8 +74,7 @@ public class NightmareZonePlugin extends Plugin
 	// above the threshold before sending notifications
 	private boolean absorptionNotificationSend = true;
 
-	private boolean overloadActive = false;
-	private int numOverloadTicksOccured = 0;
+	private Instant overloadWarningTime;
 
 	@Override
 	protected void startUp() throws Exception
@@ -116,7 +118,7 @@ public class NightmareZonePlugin extends Plugin
 		{
 			checkAbsorption();
 		}
-		if (overloadActive)
+		if (overloadWarningTime != null)
 		{
 			checkOverload();
 		}
@@ -182,8 +184,9 @@ public class NightmareZonePlugin extends Plugin
 		
 		if (drankOverloadDose(event))
 		{
-			numOverloadTicksOccured = 0;
-			overloadActive = true;
+			int secondsTilWarning = 300 - config.earlyOverloadWarningSeconds();
+			Duration duration = Duration.of(secondsTilWarning, ChronoUnit.SECONDS);
+			overloadWarningTime = Instant.now().plus(duration);
 		}
 	}
 	
@@ -224,17 +227,13 @@ public class NightmareZonePlugin extends Plugin
 
 	private void checkOverload()
 	{
-		numOverloadTicksOccured++;
-		int seconds = config.earlyOverloadWarningSeconds();
-		double ticksPerSecond = ((double)100) / 60;
-		int ticks = (int)(ticksPerSecond * seconds);
-		if (numOverloadTicksOccured == 500 - ticks)
+		if (overloadWarningTime!= null && Duration.between(Instant.now(), overloadWarningTime).isNegative())
 		{
 			if (config.earlyOverloadWarningSeconds() > 0)
 			{
-				notifier.notify("The effects of overload will wear off in " + seconds + " seconds");
+				notifier.notify("The effects of overload will wear off soon");
 			}
+			overloadWarningTime = null;
 		}
-		overloadActive = numOverloadTicksOccured < 500;
 	}
 }
